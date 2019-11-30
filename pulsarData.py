@@ -10,6 +10,7 @@ Suggested sequence
 '''
 import math
 import numpy as np
+import scipy.cluster as sc
 import matplotlib
 import matplotlib.pyplot as plt
 import scipy as sp
@@ -65,57 +66,55 @@ plt.ylabel('Variance (%)') #for each component
 plt.title('Pulsar Dataset Explained Variance')
 plt.show()
 
-pca = PCA(n_components=5)
+pca = PCA(n_components=2)
 dataset = pca.fit_transform(data_rescaled) #new dataset
 
 #detect global outliers
-
-#Clustering algorithm
-'''Heirarchal clustering'''
-
-#1) proximity measures
-def distance(data):
-    eucData = data.copy()
-    
-    rows = data.shape[0]
-    cols = data.shape[1]
-    
-    distanceMatrix = np.zeros((rows, rows))
-
-    for i in range(rows):
-        for j in range(rows):
-            
-            sumTotal = 0
-            
-            for c in range(cols):
-                
-                sumTotal = sumTotal + pow((data[i,c] - data[j,c]),2)
-                
-            distanceMatrix[i,j] = math.sqrt(sumTotal)
-        
-    return distanceMatrix
-
-distanceMatrix = distance(dataset)
-
-#condense the matrix
-condensedData = sp.spatial.distance.squareform(distanceMatrix)
-
-#Linkages
-import scipy.cluster as scClus
-
-Z = scClus.heirarchy.linkage(condensedData)
+'''kmeans'''
+print('kmeans clustering...')
+centroids, distortion = sc.vq.kmeans(dataset, 2)
 
 plt.figure(figsize=(6,4))
-scClus.heirarchy.dendrogram(Z)
-plt.savefig("dendrogram.pdf")
-                
 
-#def heirarchalAgg():
-    
-#def heirarchalDiv():
-    
-    
+plt.plot(dataset[:,0], dataset[:,1])
 
+plt.plot(centroids[0,0], centroids[0,1], 'rx')
+plt.plot(centroids[1,0], centroids[1,1], 'gx')
+
+plt.savefig('kmeans.pdf')
+plt.show()
+plt.close()
+
+'''
+def dist(p1, p2):
+    sumTotal = 0
+    
+    for c in range(len(p1)):
+        sumTotal = sumTotal + pow((p1[c] - p2[c]), 2)
+    
+    return math.sqrt(sumTotal)
+
+def minDistPos(point, matrix):
+    minPos = -1
+    minValue = float("inf")
+    
+    for rowPos in range(len(matrix)):
+        d = dist(point, matrix[rowPos, :])
+        
+        if (d< minValue):
+            minValue = d
+            minPos = rowPos
+    return minPos
+
+def sumDist(m1, m2):
+    sumTotal = 0
+    
+    for pos in range(len(m1)):
+        sumTotal = sumTotal + dist(m1[pos,:], m2[pos,:])
+    return sumTotal
+
+
+'''
 
 
 
