@@ -1,3 +1,19 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Dec 17 15:54:33 2019
+
+@author: vagrant
+"""
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Dec 17 15:41:59 2019
+
+@author: vagrant
+"""
+
 # -*- coding: utf-8 -*-
 """
 Spyder Editor
@@ -209,8 +225,9 @@ dataSmote = smote(concatData, 4108)
 
 start = time.process_time()
 '''Classification'''
-#####RBF NN#####
+#####LDA#####
 from scipy.linalg import pinv
+import torch
 
 
 #split newly sampled data and labels of new dataset
@@ -224,123 +241,127 @@ else:
     
 
 data = np.vstack((x0,x1,x2,x3,x4,x5,x6,x7)).T
+data = data.astype(np.float32)
 labels = np.array(x8)
 del x0,x1,x2,x3,x4,x5,x6,x7,x8
 
-## Global configs
-nPrototypes = 20
-nClasses = 2
-
-def maxDist(m1,m2):
-    maxDist = -1
-
-    for i in range(len(m1)):
-        for j in range(len(m2)):            
-            distance = dist(m1[i,:],m2[j,:])
-
-            if (distance > maxDist):
-                maxDist = distance
-
-    return maxDist
-
-def RBFTrain(data,labels):
-    ## Converting labels
-    convLabels = []
-
-    for label in labels:
-        if (label == 0):
-            convLabels.append([1,0])
-        elif (label == 1):
-            convLabels.append([0,1])
+def normalise(data):
+    normalisedData = data.copy()
     
-    ## Generating prototypes
-    group1 = np.random.randint(0,4042,size=nPrototypes)
-    group2 = np.random.randint(4042,8167,size=nPrototypes)
-
-    prototypes = np.vstack([data[group1,:],data[group2,:]])
-
-    ## Calculating Sigma
-    distance = maxDist(prototypes,prototypes)
-    sigma = distance/math.sqrt(nPrototypes*nClasses)
-
-    ## For each item in training set, get the output
-    dataRows = data.shape[0]
+    rows = data.shape[0]
+    cols = data.shape[1]
     
-    output = np.zeros(shape=(dataRows,nPrototypes*nClasses))
-
-    for item in range(dataRows):
-        out = []
-
-        for proto in prototypes:
-            distance = dist(data[item], proto)
-            neuronOut = np.exp(-distance/np.square(sigma))
-            out.append(neuronOut)
-
-        output[item,:] = np.array(out)
-
-    weights = np.dot(pinv(output), convLabels)
-
-    return weights, prototypes, sigma
-    
-def RBFPredict(item, prototypes, weights,sigma):
-    out = []
-
-    ## Hidden layer
-    for proto in prototypes:
-        distance = dist(item,proto)
-        neuronOut = np.exp(-(distance)/np.square(sigma))
-        out.append(neuronOut)
+    for j in range(cols):
+        maxElement = np.amax(data[:,j])
+        minElement = np.amin(data[:,j])
         
-    netOut = []
-    for c in range(nClasses):
-        result = np.dot(weights[:,c],out)
-        netOut.append(result)
+        for i in range(rows):
+            normalisedData[i,j] = (data[i,j] - minElement) / (maxElement - minElement)
+            
+    return normalisedData
 
-    return np.argmax(netOut)
 
 data = normalise(data)
-# if under sampled then size =15 (33) AND (33,66)
-# if over or smote then size = 100 ()
-#
-testGroup1 = np.random.choice(np.arange(4142),size=100,replace=False)
-testGroup2 = np.random.choice(np.arange(4142,8282),size=15,replace=False)
 
-testItems = np.concatenate([testGroup1, testGroup2],axis=None)
-print(testItems)
+upper = len(data)
+mid = upper / 2
 
-#for training data delete the test items from array
-trainingData = np.delete(data,testItems,axis=0)
-trainingLabels = np.delete(labels,testItems,axis=0)
+testGroup1 = np.random.choice(np.arange(4141), size=740, replace=False)
+testGroup2 = np.random.choice(np.arange(4141,8282), size=740, replace=False)
 
-weights, prototypes, sigma = RBFTrain(trainingData,trainingLabels)
+testItems = np.concatenate([testGroup1, testGroup2], axis=None)
 
-## Prediction and accuracy
-tp = tn = fp = fn = 0
+trainingData = np.delete(data, testItems, axis=0)
+trainingLabels = np.delete(labels, testItems, axis=0)
+
+def train(rawData, rawLabels):
+    ##convert labels
+    labels= []
+    
+    for label in rawLabels:
+        if (label == 0):
+            labels.append([1.0,0])
+        elif(label ==1):
+            labels.append([0,1.0])
+            
+    labels = torch.tensor(labels, dtype=torch.float32)
+    data = torch.from_numpy(rawData)
+    
+    model = torch.nn.Sequential(torch.nn.Linear(8,3),
+                                torch.nn.Sigmoid(),
+                                torch.nn.Linear(3,2),
+                                torch.nn.Sigmoid()
+                                )
+    
+    loss_fn = torch.nn.MSELoss(reduction='sum')
+    
+    learning_rate = 0.001
+    n_epochs = 2000
+    
+    for t in range(n_epochs):
+        y_pred = model(data)
+        
+        loss = loss_fn(y_pred, labels)
+       # print(t,loss.item())
+        
+        model.zero_grad()
+        
+        loss.backward()
+        
+        with torch.no_grad():
+            for param in model.parameters():
+                param -= learning_rate * param.grad
+    return model
+
+model = train(trainingData, trainingLabels)
+
+import re
+tp = tn = fp = fn = 0.0
+
 for item in testItems:
-    predictClass = RBFPredict(data[item,:],prototypes,weights,sigma)
-
+    with torch.no_grad():
+        prediction = model(torch.from_numpy(data[item,:]))
     print("Item: " + str(item))
-    print("Predicted Class: " + str(predictClass))
-    print("True Class: " + str(labels[item]))
-
+    
+    ###### split torch output to obtain metrics
+    s = str(prediction)
+    m = re.search(r"\[(.*?)\]", s)
+    
+    if m:
+       m = str(m.group(1))
+    else: continue
+    
+    m = str(m)
+    neuronOuts = m.split(',')
+   # print(float(neuronOuts[0]))
+    print(neuronOuts)
+    print(str(float(neuronOuts[0])) + '--' + str(float(neuronOuts[1])))
+    if (float(neuronOuts[0]) > float(neuronOuts[1])):
+        predictClass = 0
+    else:
+        predictClass = 1
+        
     if ((int(predictClass) == 1) and (int(labels[item])) == 1):
         tp += 1
+        print("correct")
     elif ((int(predictClass) == 0) and (int(labels[item])) == 0):
         tn += 1
+        print("correct")
     elif ((int(predictClass) == 1) and (int(labels[item])) == 0):
         fp += 1
     elif ((int(predictClass) == 0) and (int(labels[item])) == 1):
         fn += 1
-
+    
+    print("True Class: " + str(labels[item]))
+    ####################
+    
+print()
+print()
+print("metrics--------------")
 accuracy = (tp+tn) / (tp+tn+fp+fn)
 precision = tp / (tp+fp)
 recall = tp / (tp+fn)
-print("metrics ------" )
 print("accuracy is: " + str(accuracy))
 print("precision is: " + str(precision))
 print("recall is: " + str(recall))
-print("time taken: " + str(time.process_time() - start))
-
-
-
-
+print("Time taken: " + str(time.process_time() - start))

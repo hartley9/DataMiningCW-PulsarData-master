@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Dec 17 15:41:59 2019
+
+@author: vagrant
+"""
+
 # -*- coding: utf-8 -*-
 """
 Spyder Editor
@@ -8,7 +16,6 @@ This is a temporary script file.
 import numpy as np
 import random
 import math
-import time
 
 def readData(filePath):
     
@@ -207,14 +214,14 @@ dataSmote = smote(concatData, 4108)
 
 
 
-start = time.process_time()
+
 '''Classification'''
-#####RBF NN#####
+#####LDA#####
 from scipy.linalg import pinv
 
 
 #split newly sampled data and labels of new dataset
-sampType = 2
+sampType = 1
 if (sampType ==0):
     x0,x1,x2,x3,x4,x5,x6,x7,x8 = dataOverSampled.T
 elif(sampType ==1):
@@ -227,120 +234,137 @@ data = np.vstack((x0,x1,x2,x3,x4,x5,x6,x7)).T
 labels = np.array(x8)
 del x0,x1,x2,x3,x4,x5,x6,x7,x8
 
-## Global configs
-nPrototypes = 20
-nClasses = 2
 
-def maxDist(m1,m2):
-    maxDist = -1
+####start of lda####
+import numpy as np
+from scipy import linalg
+import matplotlib.pyplot as plt
 
-    for i in range(len(m1)):
-        for j in range(len(m2)):            
-            distance = dist(m1[i,:],m2[j,:])
 
-            if (distance > maxDist):
-                maxDist = distance
+def meanFeatures(m1):
+    mean = np.zeros(m1.shape[1])
 
-    return maxDist
+    for c in range(m1.shape[1]):
+        sumColumn = 0
+        for r in range(m1.shape[0]):
+            sumColumn = sumColumn + m1[r][c]
 
-def RBFTrain(data,labels):
-    ## Converting labels
-    convLabels = []
+        mean[c] = sumColumn/m1.shape[0]
 
-    for label in labels:
-        if (label == 0):
-            convLabels.append([1,0])
-        elif (label == 1):
-            convLabels.append([0,1])
-    
-    ## Generating prototypes
-    group1 = np.random.randint(0,4042,size=nPrototypes)
-    group2 = np.random.randint(4042,8167,size=nPrototypes)
-
-    prototypes = np.vstack([data[group1,:],data[group2,:]])
-
-    ## Calculating Sigma
-    distance = maxDist(prototypes,prototypes)
-    sigma = distance/math.sqrt(nPrototypes*nClasses)
-
-    ## For each item in training set, get the output
-    dataRows = data.shape[0]
-    
-    output = np.zeros(shape=(dataRows,nPrototypes*nClasses))
-
-    for item in range(dataRows):
-        out = []
-
-        for proto in prototypes:
-            distance = dist(data[item], proto)
-            neuronOut = np.exp(-distance/np.square(sigma))
-            out.append(neuronOut)
-
-        output[item,:] = np.array(out)
-
-    weights = np.dot(pinv(output), convLabels)
-
-    return weights, prototypes, sigma
-    
-def RBFPredict(item, prototypes, weights,sigma):
-    out = []
-
-    ## Hidden layer
-    for proto in prototypes:
-        distance = dist(item,proto)
-        neuronOut = np.exp(-(distance)/np.square(sigma))
-        out.append(neuronOut)
+    return mean
         
-    netOut = []
-    for c in range(nClasses):
-        result = np.dot(weights[:,c],out)
-        netOut.append(result)
+data = data[0:66,:]
+labels = labels[0:66]
 
-    return np.argmax(netOut)
-
-data = normalise(data)
-# if under sampled then size =15 (33) AND (33,66)
-# if over or smote then size = 100 ()
-#
-testGroup1 = np.random.choice(np.arange(4142),size=100,replace=False)
-testGroup2 = np.random.choice(np.arange(4142,8282),size=15,replace=False)
+testGroup1 = np.random.choice(np.arange(33),size=5,replace=False)
+testGroup2 = np.random.choice(np.arange(33,66),size=5,replace=False)
 
 testItems = np.concatenate([testGroup1, testGroup2],axis=None)
-print(testItems)
+testData = data[testItems,:]
 
-#for training data delete the test items from array
 trainingData = np.delete(data,testItems,axis=0)
 trainingLabels = np.delete(labels,testItems,axis=0)
 
-weights, prototypes, sigma = RBFTrain(trainingData,trainingLabels)
+## 1st step: get mean of features
+means = np.zeros((2,trainingData.shape[1]))
 
-## Prediction and accuracy
-tp = tn = fp = fn = 0
-for item in testItems:
-    predictClass = RBFPredict(data[item,:],prototypes,weights,sigma)
+means[0,:] = meanFeatures(trainingData[0:27,:])
+means[1,:] = meanFeatures(trainingData[27:56,:])
 
-    print("Item: " + str(item))
-    print("Predicted Class: " + str(predictClass))
-    print("True Class: " + str(labels[item]))
+## For the scatter matrices, we will need the overall mean
+overallMean = meanFeatures(trainingData)
 
-    if ((int(predictClass) == 1) and (int(labels[item])) == 1):
-        tp += 1
-    elif ((int(predictClass) == 0) and (int(labels[item])) == 0):
-        tn += 1
-    elif ((int(predictClass) == 1) and (int(labels[item])) == 0):
-        fp += 1
-    elif ((int(predictClass) == 0) and (int(labels[item])) == 1):
-        fn += 1
+## 2nd step: let's calculate the with-in class scatter matrix:
+SW = np.zeros((trainingData.shape[1],trainingData.shape[1]))
 
-accuracy = (tp+tn) / (tp+tn+fp+fn)
-precision = tp / (tp+fp)
-recall = tp / (tp+fn)
-print("metrics ------" )
-print("accuracy is: " + str(accuracy))
-print("precision is: " + str(precision))
-print("recall is: " + str(recall))
-print("time taken: " + str(time.process_time() - start))
+# First class:
+for p in range(0,27):
+    diff = (trainingData[p,:] - means[0,:]).reshape(trainingData.shape[1],1)
+    
+    SW += diff.dot(diff.T)
 
+# Second class:
+for p in range(27,56):
+    diff = (trainingData[p,:] - means[1,:]).reshape(trainingData.shape[1],1)
+    
+    SW += diff.dot(diff.T)
 
+## 3rd step: now let's calculate the between-class scatter matrix
+SB = np.zeros((data.shape[1],data.shape[1]))
 
+for c in range(2):
+    diff = (means[c,:] - overallMean).reshape(trainingData.shape[1],1)
+    
+    SB += 28 * diff.dot(diff.T)
+
+## 4th step: Calculate eigen-values and eigen-vectors
+invSW = linalg.inv(SW)
+eigVals, eigVectors = linalg.eig(invSW.dot(SB))
+
+## 5th step: Find top k eigen-vectors:
+orderedEigVectors = np.empty(eigVectors.shape)
+
+tmp = eigVals.copy()
+
+maxValue = float("-inf")
+maxValuePos = -1
+
+for i in range(len(eigVectors)):
+
+    maxValue = float("-inf")
+    maxValuePos = -1
+        
+    for n in range(len(eigVectors)):
+        if (tmp[n] > maxValue):
+            maxValue = tmp[n]
+            maxValuePos = n
+
+    orderedEigVectors[:,i] = eigVectors[:,maxValuePos]
+    tmp[maxValuePos] = float("-inf")
+
+k = 2
+projectionMatrix = orderedEigVectors[:,0:k]
+
+## 6th Step: Project the dataset
+ldaData = trainingData.dot(projectionMatrix)
+testLDA = testData.dot(projectionMatrix)
+
+plt.figure(figsize=(6,4))
+
+plt.plot(ldaData[0:27,0],ldaData[0:27,1],"r.")
+plt.plot(ldaData[27:56,0],ldaData[27:56,1],"g.")
+
+plt.plot(testLDA[0:5,0],testLDA[0:5,1],"rx")
+plt.plot(testLDA[5:10,0],testLDA[5:10,1],"gx")
+
+plt.xlabel("1st Principal Component")
+plt.ylabel("2nd Principal Component")
+
+plt.savefig("lda.pdf")
+
+plt.close()
+
+## Classification
+k = 1
+projectionMatrix = orderedEigVectors[:,0:k]
+
+ldaData = trainingData.dot(projectionMatrix)
+testLDA = testData.dot(projectionMatrix)
+threshold = overallMean.dot(projectionMatrix)
+
+plt.figure(figsize=(6,4))
+
+plt.plot(ldaData[0:27,0],np.zeros(27),"r.")
+plt.plot(ldaData[27:56,0],np.zeros(27),"g.")
+
+plt.plot(testLDA[0:5,0],np.zeros(5),"rx",markersize=12)
+plt.plot(testLDA[5:10,0],np.zeros(5),"gx",markersize=12)
+
+plt.plot(threshold,0,"o")
+
+plt.xlabel("1st Principal Component")
+
+plt.savefig("lda1D.pdf")
+
+plt.close()
 
