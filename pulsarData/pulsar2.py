@@ -30,7 +30,7 @@ htru2 data
 '''
 import math
 import numpy as np
-
+import scipy.cluster as sc
 import matplotlib
 import matplotlib.pyplot as plt
 import scipy as sp
@@ -52,9 +52,8 @@ while True:
     rawPulsarData.append(readData)
 
 DataFile.close()
-data = np.array(rawPulsarData)
-labels = data[:,8]
-data = data[:, 0:8]
+origionalData = np.array(rawPulsarData)
+data = origionalData[:, 0:8]
 
 def normalise(data):
     normalisedData = data.copy()
@@ -93,8 +92,7 @@ centralisedData = centralise(normalisedData)
 '''Correlation matrix'''
 corrMatrix = np.corrcoef(centralisedData, rowvar=False)
 
-
-pca = PCA(n_components=5)
+pca = PCA(n_components=2)
 pca.fit(centralisedData)
 Coeff = pca.components_
 
@@ -114,9 +112,37 @@ pca.fit(centralisedData)
 tranformedData = pca.transform(centralisedData)
 '''
 
+'''heirarchal clustering'''
+'''euclidean distance'''
+def distance(transformedData):
+    
+    rows = data.shape[0]
+    cols = data.shape[1]
+    
+    distanceMatrix = np.zeros((rows, rows))
+    
+    for i in range(rows):
+        for j in range(rows):
+            
+            sumTotal = 0
+            
+            for c in range(cols):
+                sumTotal = sumTotal + pow((data[i,c] - data[j,c]), 2)
+                
+            distanceMatrix[i,j] = math.sqrt(sumTotal)
+    return distanceMatrix
+
+condensedData = sp.spatial.distance.squareform(distance(data))
+
+
+
+'''agglomerative'''
+
+'''divisive'''
+
 '''k-means clustering'''
 
-import scipy.cluster as sc
+
 def standard(data):
     standardData = data.copy()
     
@@ -160,107 +186,13 @@ for d in standardData:
             
 plt.figure(figsize=(12,8))
 
-plt.plot(group1[:,0], group1[:,1],'r.')
-plt.plot(group2[:,0], group2[:,1], 'g.')
+plt.plot(group1[:,0], group1[:,1],'g.')
+plt.plot(group2[:,0], group2[:,1], 'b.')
 
-plt.plot(centroids[0,0], centroids[0,1], 'bx')
-plt.plot(centroids[1,0], centroids[1,1], 'bx')
+plt.plot(centroids[0,0], centroids[0,1], 'rx')
+plt.plot(centroids[1,0], centroids[1,1], 'gx')
 
-
-print('Group 1 - Not-Pulsar: ' + str(len(group1)))
-print('Group 2 - Pular: ' + str(len(group2)))
-print()
-
-unique_elements, count_elements = np.unique(labels, return_counts=True)
-print("Frequency of unique counts")
-print(unique_elements)
-print(count_elements)
 plt.show()
-
-'''------------End of kmeans------------'''
-
-##SciKit learn heirarchal clustering
-
-from sklearn.cluster import AgglomerativeClustering as ac
-import scipy.cluster.hierarchy as shc
-print('----------Hierarchal Clustering--------')
-print('transformingData')
-sampSize = 500
-transformedData = transformedData[0:sampSize, :]
-labels = labels[0:sampSize]
-
-cluster = ac(n_clusters=2, affinity='euclidean', linkage='ward')
-cluster.fit_predict(transformedData)
-
-plt.figure(figsize=(10,7))
-plt.scatter(transformedData[:,0], transformedData[:,1], c=cluster.labels_, cmap='rainbow')
-
-##Check this bit
-print('Group 1 - Not-Pulsar: ' + str((transformedData[:,0])))
-print('Group 2 - Pular: ' + str((transformedData[:,1])))
-
-unique_elements, count_elements = np.unique(labels, return_counts=True)
-print(unique_elements)
-print(count_elements)
-
-
-plt.figure(figsize=(10,7))
-plt.title("Dendrogram")
-dens = shc.dendrogram(shc.linkage(transformedData, method='ward'))
-
-
-
-'''Heirarchal clustering
-
-def distance(data):
-    
-    rows = data.shape[0]
-    cols = data.shape[1]
-    
-    distanceMatrix = np.zeros((rows,rows))
-    
-    for i in range(rows):
-        for j in range(rows):
-            sumTotal = 0
-            
-            for c in range(cols):
-                
-                sumTotal = sumTotal + pow((data[i,c] - data[j,c]), 2)
-                
-            distanceMatrix[i,j] = math.sqrt(sumTotal)
-    return distanceMatrix
-
-distanceData = distance(data)
-
-
-#euclidean distance
-
-distanceData = distance(transformedData)
-
-condensedData = sp.spatial.distance.squareform(distanceData)
-
-
-#linkages
-
-Z = sc.heirarchy.linkage(condensedData)
-print('Linkages done...')
-#dendrograms
-print('plotting dendrograms')
-plt.figure(figsize=(6,4))
-sc.hierarchy.dendrogram(Z)
-plt.savefig("dendrogram.pdf")
-plt.show()
-
-plt.figure(figsize=(6,4))
-sc.heirarchy.dendrogram(Z, truncate_mode='lastp', p=12)
-plt.savefig('dendro2.pdf')
-plt.close()
-'''
-
-
-
-'''Calculate accuracy'''
-
 
 
 
